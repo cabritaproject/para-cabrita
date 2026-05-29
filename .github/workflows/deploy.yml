@@ -30,65 +30,52 @@ jobs:
         with:
           node-version: "20"
 
-      - name: Patch package.json and tsconfig.json for static build
-        working-directory: artifacts/cabrita-journey
+      - name: Setup pnpm
+        run: npm install -g pnpm@9
+
+      - name: Isolate workspace for build
         run: |
           node -e "
           const fs = require('fs');
 
-          // 1. Resolve package.json catalog: entries, remove Replit/workspace deps
-          const pkg = JSON.parse(fs.readFileSync('package.json', 'utf8'));
-          const catalog = {
-            '@tailwindcss/vite': '^4.1.14',
-            '@tanstack/react-query': '^5.90.21',
-            '@types/node': '^25.3.3',
-            '@types/react': '^19.2.0',
-            '@types/react-dom': '^19.2.0',
-            '@vitejs/plugin-react': '^5.0.4',
-            'class-variance-authority': '^0.7.1',
-            'clsx': '^2.1.1',
-            'framer-motion': '^12.23.24',
-            'lucide-react': '^0.545.0',
-            'react': '19.1.0',
-            'react-dom': '19.1.0',
-            'tailwind-merge': '^3.3.1',
-            'tailwindcss': '^4.1.14',
-            'vite': '^7.3.2',
-            'wouter': '^3.3.5',
-            'zod': '^3.25.76',
-          };
+          // 1. Override pnpm-workspace.yaml to only include cabrita-journey
+          const ws = 'packages:\\n  - artifacts/cabrita-journey\\n\\ncatalog:\\n  \"@tailwindcss/vite\": \"^4.1.14\"\\n  \"@tanstack/react-query\": \"^5.90.21\"\\n  \"@types/node\": \"^25.3.3\"\\n  \"@types/react\": \"^19.2.0\"\\n  \"@types/react-dom\": \"^19.2.0\"\\n  \"@vitejs/plugin-react\": \"^5.0.4\"\\n  \"class-variance-authority\": \"^0.7.1\"\\n  \"clsx\": \"^2.1.1\"\\n  \"framer-motion\": \"^12.23.24\"\\n  \"lucide-react\": \"^0.545.0\"\\n  \"react\": \"19.1.0\"\\n  \"react-dom\": \"19.1.0\"\\n  \"tailwind-merge\": \"^3.3.1\"\\n  \"tailwindcss\": \"^4.1.14\"\\n  \"vite\": \"^7.3.2\"\\n  \"wouter\": \"^3.3.5\"\\n  \"zod\": \"^3.25.76\"\\n';
+          fs.writeFileSync('pnpm-workspace.yaml', ws);
+
+          // 2. Patch cabrita-journey package.json: remove Replit + workspace:* deps
+          const pkgPath = 'artifacts/cabrita-journey/package.json';
+          const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf8'));
           const skip = [
             '@replit/vite-plugin-cartographer',
             '@replit/vite-plugin-dev-banner',
             '@replit/vite-plugin-runtime-error-modal',
             '@workspace/api-client-react',
           ];
-          const resolved = {};
-          for (const [k, v] of Object.entries(pkg.devDependencies || {})) {
-            if (skip.includes(k)) continue;
-            resolved[k] = v === 'catalog:' ? (catalog[k] || v) : v;
-          }
-          pkg.devDependencies = resolved;
-          delete pkg.dependencies;
-          fs.writeFileSync('package.json', JSON.stringify(pkg, null, 2));
-
-          // 2. Remove lib/api-client-react reference from tsconfig.json
-          const tsconfig = JSON.parse(fs.readFileSync('tsconfig.json', 'utf8'));
-          tsconfig.references = (tsconfig.references || []).filter(
-            r => !r.path.includes('api-client-react')
+          pkg.devDependencies = Object.fromEntries(
+            Object.entries(pkg.devDependencies || {}).filter(([k]) => !skip.includes(k))
           );
-          fs.writeFileSync('tsconfig.json', JSON.stringify(tsconfig, null, 2));
+          delete pkg.dependencies;
+          fs.writeFileSync(pkgPath, JSON.stringify(pkg, null, 2));
 
-          console.log('Patched package.json and tsconfig.json OK');
+          // 3. Patch tsconfig: remove api-client-react reference
+          const tscPath = 'artifacts/cabrita-journey/tsconfig.json';
+          const tsc = JSON.parse(fs.readFileSync(tscPath, 'utf8'));
+          tsc.references = (tsc.references || []).filter(r => !r.path.includes('api-client-react'));
+          fs.writeFileSync(tscPath, JSON.stringify(tsc, null, 2));
+
+          // 4. Replace root package.json with a minimal one (no Replit deps)
+          const rootPkg = { name: 'para-cabrita', private: true, version: '0.0.0' };
+          fs.writeFileSync('package.json', JSON.stringify(rootPkg, null, 2));
+
+          console.log('Isolation complete');
           "
 
       - name: Install dependencies
-        working-directory: artifacts/cabrita-journey
-        run: npm install
+        run: pnpm install --no-frozen-lockfile
 
       - name: Build
         working-directory: artifacts/cabrita-journey
-        run: npx vite build --config vite.config.github.ts
+        run: pnpm exec vite build --config vite.config.github.ts
 
       - name: Setup Pages
         uses: actions/configure-pages@v4
