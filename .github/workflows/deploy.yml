@@ -30,6 +30,48 @@ jobs:
         with:
           node-version: "20"
 
+      - name: Resolve catalog deps and create clean package.json
+        working-directory: artifacts/cabrita-journey
+        run: |
+          node -e "
+          const fs = require('fs');
+          const pkg = JSON.parse(fs.readFileSync('package.json', 'utf8'));
+          const catalog = {
+            '@tailwindcss/vite': '^4.1.14',
+            '@tanstack/react-query': '^5.90.21',
+            '@types/node': '^25.3.3',
+            '@types/react': '^19.2.0',
+            '@types/react-dom': '^19.2.0',
+            '@vitejs/plugin-react': '^5.0.4',
+            'class-variance-authority': '^0.7.1',
+            'clsx': '^2.1.1',
+            'framer-motion': '^12.23.24',
+            'lucide-react': '^0.545.0',
+            'react': '19.1.0',
+            'react-dom': '19.1.0',
+            'tailwind-merge': '^3.3.1',
+            'tailwindcss': '^4.1.14',
+            'vite': '^7.3.2',
+            'wouter': '^3.3.5',
+            'zod': '^3.25.76',
+          };
+          const skip = [
+            '@replit/vite-plugin-cartographer',
+            '@replit/vite-plugin-dev-banner',
+            '@replit/vite-plugin-runtime-error-modal',
+            '@workspace/api-client-react',
+          ];
+          const resolved = {};
+          for (const [k, v] of Object.entries(pkg.devDependencies || {})) {
+            if (skip.includes(k)) continue;
+            resolved[k] = v === 'catalog:' ? (catalog[k] || v) : v;
+          }
+          pkg.devDependencies = resolved;
+          delete pkg.dependencies;
+          fs.writeFileSync('package.json', JSON.stringify(pkg, null, 2));
+          console.log('package.json resolved OK');
+          "
+
       - name: Install dependencies
         working-directory: artifacts/cabrita-journey
         run: npm install
