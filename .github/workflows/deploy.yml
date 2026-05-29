@@ -30,16 +30,13 @@ jobs:
         with:
           node-version: "20"
 
-      - name: Setup pnpm
-        run: npm install -g pnpm@9
-
       - name: Install dependencies
-        run: pnpm install --no-frozen-lockfile
+        working-directory: artifacts/cabrita-journey
+        run: npm install
 
       - name: Build
-        run: |
-          cd artifacts/cabrita-journey
-          pnpm exec vite build --config vite.config.github.ts
+        working-directory: artifacts/cabrita-journey
+        run: npx vite build --config vite.config.github.ts
 
       - name: Setup Pages
         uses: actions/configure-pages@v4
