@@ -30,11 +30,13 @@ jobs:
         with:
           node-version: "20"
 
-      - name: Resolve catalog deps and create clean package.json
+      - name: Patch package.json and tsconfig.json for static build
         working-directory: artifacts/cabrita-journey
         run: |
           node -e "
           const fs = require('fs');
+
+          // 1. Resolve package.json catalog: entries, remove Replit/workspace deps
           const pkg = JSON.parse(fs.readFileSync('package.json', 'utf8'));
           const catalog = {
             '@tailwindcss/vite': '^4.1.14',
@@ -69,7 +71,15 @@ jobs:
           pkg.devDependencies = resolved;
           delete pkg.dependencies;
           fs.writeFileSync('package.json', JSON.stringify(pkg, null, 2));
-          console.log('package.json resolved OK');
+
+          // 2. Remove lib/api-client-react reference from tsconfig.json
+          const tsconfig = JSON.parse(fs.readFileSync('tsconfig.json', 'utf8'));
+          tsconfig.references = (tsconfig.references || []).filter(
+            r => !r.path.includes('api-client-react')
+          );
+          fs.writeFileSync('tsconfig.json', JSON.stringify(tsconfig, null, 2));
+
+          console.log('Patched package.json and tsconfig.json OK');
           "
 
       - name: Install dependencies
